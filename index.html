@@ -279,6 +279,22 @@ function fitMap(r) {
   MAP.ox = r.x + r.w / 2 - (BX0 + BX1) / 2 * MAP.s; MAP.oy = r.y + r.h / 2 - (BY0 + BY1) / 2 * MAP.s;
 }
 const sx = x => MAP.ox + x * MAP.s, sy = y => MAP.oy + y * MAP.s;
+/* 地図の拡大・縮小（問題の画面だけ）。Z.k＝倍率（1＝日本ぜんたい。それより小さくはならない）、Z.x・Z.y＝地図の枠のまん中からのずれ（画面上の長さ）。
+   問題が変わるたびに元の大きさにもどり、答え合わせでは すっと全体にもどる（両がわの％と「ここで半分」の線を見せるため）。
+   地図は枠の外へは逃げない（拡大しても、枠の中は必ず地図で埋まる） */
+const ZOOM_MAX = 4;
+const Z = { k: 1, x: 0, y: 0, from: null };
+function zoomClamp() { const r = L.board; Z.k = clamp(Z.k, 1, ZOOM_MAX); const mx = (Z.k - 1) * r.w / 2, my = (Z.k - 1) * r.h / 2; Z.x = clamp(Z.x, -mx, mx); Z.y = clamp(Z.y, -my, my); }
+function zoomApply(r) {   // fitMap(r) のすぐあとに呼ぶ：倍率とずれを、地図の描き方（MAP）に反映する。切る線の計算も MAP を通るので、拡大した見た目のとおりに切れる
+  if (Z.k === 1 && !Z.x && !Z.y) return; zoomClamp(); const cx = r.x + r.w / 2, cy = r.y + r.h / 2;
+  MAP.ox = cx + (MAP.ox - cx) * Z.k + Z.x; MAP.oy = cy + (MAP.oy - cy) * Z.k + Z.y; MAP.s *= Z.k;
+}
+function zoomAt(fx, fy, k1) {   // 画面上の点 (fx, fy) の下にある場所を動かさずに、倍率を k1 にする
+  const r = L.board, cx = r.x + r.w / 2, cy = r.y + r.h / 2, k0 = Z.k; k1 = clamp(k1, 1, ZOOM_MAX);
+  Z.x = fx - cx - (fx - cx - Z.x) * k1 / k0; Z.y = fy - cy - (fy - cy - Z.y) * k1 / k0; Z.k = k1; zoomClamp();
+}
+function zoomReset() { Z.k = 1; Z.x = Z.y = 0; Z.from = null; }
+function zoomBack() { const f = Z.from, e = ease((now() - f.t) / 0.4); Z.k = 1 + (f.k - 1) * (1 - e); Z.x = f.x * (1 - e); Z.y = f.y * (1 - e); if (e >= 1) zoomReset(); }   // 答え合わせ：0.4秒で全体にもどる
 const kx = X => (X - MAP.ox) / MAP.s, ky = Y => (Y - MAP.oy) / MAP.s;
 function resize() {
   const sa = document.getElementById('sa'), cs = getComputedStyle(sa);
@@ -395,7 +411,7 @@ function startGame(custom, nw) { // custom＝自分で選んだお題（QN個）
   G.custom = Array.isArray(custom) && custom.length === QN; G.nw = !G.custom && nw === true; G.qs = G.custom ? custom.slice() : pickThemes(G.nw);
   G.qi = 0; G.res = []; G.total = 0; G.newBest = false; G.justAll = false; G.justNew = false; startQ();
 }
-function startQ() { G.cut = null; G.drag = null; G.lastTick = 99; setState('intro'); SFX.q(); }
+function startQ() { G.cut = null; G.drag = null; G.lastTick = 99; zoomReset(); zoomInputReset(); setState('intro'); SFX.q(); }
 function judgeOf(dev) { for (const j of JUDGE) if (dev <= j[0]) return j; return JUDGE[JUDGE.length - 1]; }
 function doCut(x0, y0, x1, y1) { // 画面上の2点を通る直線で切る
   const th = G.qs[G.qi], dx = x1 - x0, dy = y1 - y0, len = Math.hypot(dx, dy);
@@ -404,7 +420,7 @@ function doCut(x0, y0, x1, y1) { // 画面上の2点を通る直線で切る
   const la = landCenter(nx, ny, c, 1), lb = landCenter(nx, ny, c, -1);
   const miss = !la || !lb || Math.min(la.n, lb.n) < NC * 0.004;
   const score = Math.max(0, Math.round(100 - PT_PER_PCT * dev));
-  G.cut = { th, x0, y0, ux, uy, nx, ny, c, sh, dev, hc, la, lb, miss, score, timeout: false, j: miss ? [0, '日本を切れてない!', C.gray] : judgeOf(dev) };
+  G.cut = { th, x0, y0, mx: kx(x0), my: ky(y0), ux, uy, nx, ny, c, sh, dev, hc, la, lb, miss, score, timeout: false, j: miss ? [0, '日本を切れてない!', C.gray] : judgeOf(dev) };
   finishQ();
   SFX.slash(); buzz(30); G.shake = 0.35;
 }
@@ -413,7 +429,7 @@ function timeUp() {
   G.cut = { th, timeout: true, score: 0, dev: null, j: [0, '時間切れ…', C.gray] };
   finishQ(); SFX.timeup();
 }
-function finishQ() { G.res.push(G.cut); G.total += G.cut.score; G.drag = null; if (!G.custom) markSeen(G.cut.th.k); setState('reveal'); G.played = { roll: 0, judge: 0 }; }
+function finishQ() { if (Z.k !== 1 || Z.x || Z.y) Z.from = { k: Z.k, x: Z.x, y: Z.y, t: now() }; zoomInputReset(); G.res.push(G.cut); G.total += G.cut.score; G.drag = null; if (!G.custom) markSeen(G.cut.th.k); setState('reveal'); G.played = { roll: 0, judge: 0 }; }
 function nextQ() {
   G.qi++;
   if (G.qi < QN) { startQ(); return; }
@@ -423,6 +439,7 @@ function nextQ() {
 function rankOf(s) { for (const r of RANKS) if (s >= r[0]) return r; return RANKS[RANKS.length - 1]; }
 function update(dt) {
   G.t += dt; G.shake = Math.max(0, G.shake - dt * 1.4);
+  if (Z.from) zoomBack();
   const s = since();
   if (G.state === 'select' && !SEL.drag) { SEL.sy = clamp(SEL.sy + SEL.vy * dt, 0, selLay().max); SEL.vy *= Math.exp(-dt * 4.5); }   // 指を離した後の すべり
   if (G.state === 'intro' && s >= 1.1) { setState('cut'); }
@@ -622,13 +639,13 @@ function drawTimer() {
 }
 function drawPlay() {
   drawHeader(); drawCard();
-  const r = L.board; fitMap(r); board(r);
+  const r = L.board; fitMap(r); zoomApply(r); board(r);
   const cut = G.cut, s = since();
   ctx.save(); rr(r.x, r.y, r.w, r.h, 20); ctx.clip();
   if (G.state === 'reveal' && cut && !cut.timeout) {
-    const wgt = weights(cut.th.k), sep = 7 * ease(s / 0.35), ca = ease((s - 0.05) / 0.4);
+    const wgt = weights(cut.th.k), sep = 7 * ease(s / 0.35), ca = ease((s - 0.05) / 0.4), X0 = sx(cut.mx), Y0 = sy(cut.my);   // X0,Y0＝切った線の上の1点が、いま画面のどこにあるか
     for (const sg of [1, -1]) {
-      ctx.save(); halfClip(cut.x0, cut.y0, cut.ux, cut.uy, sg); ctx.translate(cut.nx * sep * sg, cut.ny * sep * sg);
+      ctx.save(); halfClip(X0, Y0, cut.ux, cut.uy, sg); ctx.translate(cut.nx * sep * sg, cut.ny * sep * sg);
       const col = sg > 0 ? C.A : C.B; drawLand(p => rgba(col, ca * (0.14 + 0.78 * Math.sqrt(wgt.dens[p]))));
       ctx.restore();
     }
@@ -638,8 +655,8 @@ function drawPlay() {
       lineAcross(px, py, cut.ux, cut.uy, C.gold, 4, [12, 7], k);
     }
     // 切り口の光 → そのあとは自分の線として白い線を残す
-    if (s < 0.5) { const a = 1 - s / 0.5; lineAcross(cut.x0, cut.y0, cut.ux, cut.uy, '#fff', 3 + 10 * a, null, a); }
-    else lineAcross(cut.x0, cut.y0, cut.ux, cut.uy, '#fff', 2.4, null, Math.min(1, (s - 0.5) / 0.3) * 0.9);
+    if (s < 0.5) { const a = 1 - s / 0.5; lineAcross(X0, Y0, cut.ux, cut.uy, '#fff', 3 + 10 * a, null, a); }
+    else lineAcross(X0, Y0, cut.ux, cut.uy, '#fff', 2.4, null, Math.min(1, (s - 0.5) / 0.3) * 0.9);
   } else {
     drawLand(null);
     if (G.state === 'reveal' && cut && cut.timeout) { ctx.fillStyle = 'rgba(43,33,24,0.25)'; ctx.fillRect(r.x, r.y, r.w, r.h); }
@@ -650,15 +667,22 @@ function drawPlay() {
     lineAcross(d.x0, d.y0, ux, uy, '#fff', 3.2, [11, 8]);
   }
   ctx.restore();
+  if (G.state === 'cut' || G.state === 'intro') drawZoomHint(r);
   if (G.state === 'cut' && G.drag) { const d = G.drag; txt('✂️', d.x1, d.y1 - 26, 28, '#000'); ctx.save(); ctx.fillStyle = 'rgba(255,255,255,0.9)'; ctx.strokeStyle = C.ink; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(d.x0, d.y0, 6, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); ctx.restore(); }
   if (G.state === 'reveal' && cut && !cut.timeout) drawReveal(cut, s);
   if (G.state === 'reveal' && cut && cut.timeout) txt('時間切れ…', W / 2, r.y + r.h / 2, 42, '#fff', { stroke: C.ink, sw: 8, sc: back(s / 0.3) });
   if (G.state !== 'reveal') drawTimer();
   drawBottom();
 }
+function drawZoomHint(r) {   // 地図の右下に小さく出す案内（押すボタンではない）。拡大している間は、倍率を出す
+  const s = Z.k > 1.005 ? '🔍 ×' + Z.k.toFixed(1) : INPUT === 'mouse' ? '🔍 ホイールで拡大' : '🔍 2本指で拡大';
+  ctx.save(); ctx.font = `800 12px ${FONT}`; const w = Math.ceil(ctx.measureText(s).width) + 18, hh = 24, x = r.x + r.w - 9 - w, y = r.y + r.h - 9 - hh;
+  ctx.fillStyle = 'rgba(255,255,255,0.88)'; rr(x, y, w, hh, 12); ctx.fill(); ctx.strokeStyle = 'rgba(43,33,24,0.5)'; ctx.lineWidth = 1.5; ctx.stroke(); ctx.restore();
+  txt(s, x + w / 2, y + hh / 2 + 0.5, 12, C.ink);
+}
 function pctPos(c, sg) { // その側でいちばん奥の角（地図の上に乗りにくい）
   const r = L.board, xs = [r.x + 56, r.x + r.w - 56], ys = [r.y + 104, r.y + r.h - 64]; let best = null, bd = -1e9;
-  for (const x of xs) for (const y of ys) { const d = ((x - c.x0) * -c.uy + (y - c.y0) * c.ux) * sg; if (d > bd) { bd = d; best = { x, y }; } }
+  for (const x of xs) for (const y of ys) { const d = ((x - sx(c.mx)) * -c.uy + (y - sy(c.my)) * c.ux) * sg; if (d > bd) { bd = d; best = { x, y }; } }
   return best;
 }
 function pctLabel(c, sg, val, col, k) { // 切ったそれぞれの側に「48.7%」
@@ -755,6 +779,7 @@ function render() {
 
 // ================= 入力 =================
 const inBox = (b, x, y) => x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h;
+const grow = (b, t, r, bt, l) => ({ x: b.x - l, y: b.y - t, w: b.w + l + r, h: b.h + t + bt });   // 絵はそのままで、押せる範囲だけを外へ広げた四角（上・右・下・左）。小さいボタンを押しやすくする
 function shareX() {
   const url = /^https?:/.test(location.protocol) && location.hostname.endsWith('github.io') ? location.origin + location.pathname : URL_PUBLIC;
   const rk = rankOf(G.total), dv = G.res.filter(c => !c.timeout).map(c => c.dev), avg = dv.length ? (dv.reduce((a, b) => a + b, 0) / dv.length).toFixed(1) : 'ー';
@@ -774,7 +799,7 @@ function onDown(x, y, id) {
   }
   if (G.state === 'select') {
     const l = selLay();
-    if (inBox(l.back, x, y)) { SFX.click(); setState('title'); return; }
+    if (inBox(grow(l.back, 10, 8, 0, 8), x, y)) { SFX.click(); setState('title'); return; }   // 「もどる」は上・左右だけ広げる（すぐ下にジャンルのタブがあるので、下へは広げない）
     if (inBox(l.go, x, y)) { if (SEL.pick.length === QN) { SFX.click(); startGame(SEL.pick); } return; }
     const tb = tabLay().find(t => x >= t.x - 2 && x <= t.x + t.w + 2 && y >= t.y - 6 && y <= t.y + t.h + 4);   // ジャンルのタブ（少し広めに反応）
     if (tb) { if (tb.g !== SEL.g) { SEL.g = tb.g; SEL.sy = 0; SEL.vy = 0; SEL.drag = null; SFX.click(); } return; }   // 別の指で一覧を押さえたままタブを切りかえても、まちがって選ばれないように drag を消す
@@ -785,7 +810,7 @@ function onDown(x, y, id) {
   if (G.state === 'reveal') { if (since() > 1.6 && inBox(L.next, x, y)) { SFX.click(); nextQ(); } return; }
   if (G.state === 'result' && since() > 0.9) {
     const b = resultBtns();
-    if (inBox(b.share, x, y)) shareX(); else if (inBox(b.retry, x, y)) { SFX.click(); startGame(G.custom ? G.qs : null, G.nw); } else if (inBox(b.menu, x, y)) { SFX.click(); if (G.custom) openSelect(); else setState('title'); }
+    if (inBox(b.share, x, y)) shareX(); else if (inBox(b.retry, x, y)) { SFX.click(); startGame(G.custom ? G.qs : null, G.nw); } else if (inBox(grow(b.menu, 5, 10, 10, 10), x, y)) { SFX.click(); if (G.custom) openSelect(); else setState('title'); }
   }
 }
 function onMove(x, y, id) {
@@ -809,11 +834,58 @@ function onUp(x, y, id) {
   if (G.state === 'cut' && G.drag) { onMove(x, y, id); const d = G.drag; G.drag = null; if (d.len >= MIN_SWIPE) doCut(d.x0, d.y0, d.x1, d.y1); }
 }
 const lx = e => (e.clientX - OX) / S, ly = e => (e.clientY - OY) / S;
-cv.addEventListener('pointerdown', e => { e.preventDefault(); onDown(lx(e), ly(e), e.pointerId); });
-window.addEventListener('pointermove', e => { onMove(lx(e), ly(e), e.pointerId); });
-window.addEventListener('pointerup', e => { onUp(lx(e), ly(e), e.pointerId); });
-window.addEventListener('pointercancel', e => { if (e.pointerId === ptr) { ptr = null; G.drag = null; } if (SEL.drag && e.pointerId === SEL.drag.id) SEL.drag = null; });
-cv.addEventListener('wheel', e => { if (G.state === 'select') { e.preventDefault(); SEL.vy = 0; SEL.sy = clamp(SEL.sy + e.deltaY / S, 0, selLay().max); } }, { passive: false });   // パソコンのホイール
+/* この版には広告バナーがないので、画面ぜんぶがゲームの場所（inArea はいつも true）。lastIn＝指・マウスが さいごにあった場所 */
+const inArea = () => true, lastIn = new Map();
+/* 拡大・縮小の操作（問題の画面だけ。お題のカードが出た瞬間から、切り終わるまで）。
+   指：2本目の指がふれたら「つまむ」に切りかえる（引きかけの線は取り消す）。つまんだあとは、指をぜんぶ離すまで「切る」を始めない（うっかり切らないように）。
+   　　数えるのは、ゲームの画面にふれた指だけ。
+   マウス：左ボタンは今までどおり「切る」。右ボタン（まん中のボタン）を押しながら動かすと、地図の位置がずれる。ホイールで拡大・縮小 */
+const TOUCH = new Map();      // 画面にふれている指：id → [x, y]
+let pinch = null, pan = null, noCut = false;      // pinch＝2本指でつまんでいる間の記録　pan＝右ボタンで動かしている間の記録
+let INPUT = window.matchMedia && window.matchMedia('(pointer: coarse)').matches ? 'touch' : 'mouse';      // さいごに使ったのが指かマウスか（案内の文を合わせる）
+const zoomable = () => G.state === 'cut' || G.state === 'intro';      // 拡大・縮小ができる間
+function zoomInputReset() { TOUCH.clear(); pinch = null; pan = null; noCut = false; }
+function pinchStart() {
+  const [a, b] = [...TOUCH.keys()], pa = TOUCH.get(a), pb = TOUCH.get(b);
+  pinch = { a, b, d0: Math.max(16, Math.hypot(pa[0] - pb[0], pa[1] - pb[1])), mx: (pa[0] + pb[0]) / 2, my: (pa[1] + pb[1]) / 2, k0: Z.k, x0: Z.x, y0: Z.y }; noCut = true; G.drag = null; ptr = null;
+}
+function pinchMove() {   // 指の間の長さで倍率を、指のまん中の動きで位置を決める（つまみ始めた時に指の下にあった場所が、ずっと指の下にある）
+  const pa = TOUCH.get(pinch.a), pb = TOUCH.get(pinch.b), r = L.board, cx = r.x + r.w / 2, cy = r.y + r.h / 2;
+  const d = Math.hypot(pa[0] - pb[0], pa[1] - pb[1]), mx = (pa[0] + pb[0]) / 2, my = (pa[1] + pb[1]) / 2, k1 = clamp(pinch.k0 * d / pinch.d0, 1, ZOOM_MAX);
+  Z.x = mx - cx - (pinch.mx - cx - pinch.x0) * k1 / pinch.k0; Z.y = my - cy - (pinch.my - cy - pinch.y0) * k1 / pinch.k0; Z.k = k1; zoomClamp();
+}
+cv.addEventListener('pointerdown', e => {
+  e.preventDefault(); const x = lx(e), y = ly(e); lastIn.set(e.pointerId, [x, y]); INPUT = e.pointerType === 'mouse' ? 'mouse' : 'touch';
+  const finger = e.pointerType !== 'mouse'; if (finger) TOUCH.set(e.pointerId, [x, y]);
+  if (zoomable()) {
+    if (!finger) { if (e.button !== 0) { pan = { id: e.pointerId, x, y }; return; } }
+    else { if (TOUCH.size === 2) { pinchStart(); return; } if (TOUCH.size > 2 || noCut) return; }
+  }
+  onDown(x, y, e.pointerId);
+});
+window.addEventListener('pointermove', e => {
+  if (!inArea(e)) return; const x = lx(e), y = ly(e); lastIn.set(e.pointerId, [x, y]);
+  if (TOUCH.has(e.pointerId)) TOUCH.set(e.pointerId, [x, y]);
+  if (!pinch && noCut && TOUCH.size === 2 && TOUCH.has(e.pointerId) && zoomable()) pinchStart();      // 3本のうち1本を離した → 残りの2本でつまみ続ける
+  if (pinch) { if (zoomable() && (e.pointerId === pinch.a || e.pointerId === pinch.b)) pinchMove(); return; }
+  if (pan && e.pointerId === pan.id) { if (zoomable() && !G.drag) { Z.x += x - pan.x; Z.y += y - pan.y; zoomClamp(); } pan.x = x; pan.y = y; return; }
+  onMove(x, y, e.pointerId);
+});
+window.addEventListener('pointerup', e => {
+  const p = inArea(e) ? [lx(e), ly(e)] : (lastIn.get(e.pointerId) || [lx(e), ly(e)]); lastIn.delete(e.pointerId); TOUCH.delete(e.pointerId);
+  if (pinch && (e.pointerId === pinch.a || e.pointerId === pinch.b)) pinch = null;      // つまむのをやめた（残った指では切らない）
+  if (TOUCH.size === 0) noCut = false;
+  if (pan && e.pointerId === pan.id) { pan = null; return; }
+  onUp(p[0], p[1], e.pointerId);
+});
+window.addEventListener('pointercancel', e => {
+  lastIn.delete(e.pointerId); TOUCH.delete(e.pointerId); if (pinch && (e.pointerId === pinch.a || e.pointerId === pinch.b)) pinch = null; if (TOUCH.size === 0) noCut = false; if (pan && e.pointerId === pan.id) pan = null;
+  if (e.pointerId === ptr) { ptr = null; G.drag = null; } if (SEL.drag && e.pointerId === SEL.drag.id) SEL.drag = null;
+});
+cv.addEventListener('wheel', e => {   // パソコンのホイール：お題の一覧では上下に動かす。問題の画面では、カーソルの所を中心に拡大・縮小（線を引いている最中は、何もしない）
+  if (G.state === 'select') { e.preventDefault(); SEL.vy = 0; SEL.sy = clamp(SEL.sy + e.deltaY / S, 0, selLay().max); }
+  else if (zoomable()) { e.preventDefault(); INPUT = 'mouse'; if (!G.drag && !pinch) { const r = L.board, dy = e.deltaMode === 1 ? e.deltaY * 33 : e.deltaY; zoomAt(clamp(lx(e), r.x, r.x + r.w), clamp(ly(e), r.y, r.y + r.h), Z.k * Math.exp(-dy * (e.ctrlKey ? 0.012 : 0.0022))); } }
+}, { passive: false });
 document.addEventListener('touchend', audioInit, { passive: true });
 document.addEventListener('contextmenu', e => e.preventDefault());
 document.addEventListener('gesturestart', e => e.preventDefault());
@@ -829,7 +901,7 @@ if (document.fonts && document.fonts.load) {
   document.fonts.load(`800 20px "M PLUS Rounded 1c"`, t).catch(() => { }); document.fonts.load(`500 20px "M PLUS Rounded 1c"`, t).catch(() => { });
 }
 // テスト用（遊びには影響しません）
-window.__mp = { G, L, MAP, THEMES, share, halfC, weights, doCut, startGame, nextQ, sx, sy, kx, ky, NC: () => NC, fitMap, SEL, selLay, selCell, openSelect, pickThemes, markSeen, leftCount, store, setState, GENRES, UNLOCK_N, unlockLeft, selList, tabLay, NEW_THEMES, newSeen, newLeft, newDone, layout };
+window.__mp = { area: () => ({ bottom: OY + H * S, S, H, OX, OY }), Z, ZOOM_MAX, zoomAt, zoomInfo: () => ({ pinch: !!pinch, pan: !!pan, noCut, touches: TOUCH.size, input: INPUT }), G, L, MAP, THEMES, share, halfC, weights, doCut, startGame, nextQ, sx, sy, kx, ky, NC: () => NC, fitMap, SEL, selLay, selCell, openSelect, pickThemes, markSeen, leftCount, store, setState, GENRES, UNLOCK_N, unlockLeft, selList, tabLay, NEW_THEMES, newSeen, newLeft, newDone, layout };
 })();
 </script>
 <!-- nkw-ikkaku --><style>.nkw-ikk{display:inline-block;box-sizing:border-box;max-width:92vw;padding:5px 14px;border-radius:999px;background:rgba(255,255,255,.92);border:1px solid rgba(60,90,120,.35);color:#3c5a78;font:500 12.5px/1.4 "Hiragino Sans","Noto Sans JP",system-ui,sans-serif;text-decoration:none;white-space:nowrap;letter-spacing:.02em}#nkw-ikk{position:fixed;z-index:2147483000;transform:translate(-50%,-50%);transition:opacity .3s;box-shadow:0 2px 8px rgba(0,0,0,.12)}#nkw-ikk[hidden]{display:none}</style>
