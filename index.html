@@ -269,7 +269,7 @@ function buzz(ms) { try { if (navigator.vibrate) navigator.vibrate(ms); } catch 
 // ================= ゲームの状態 =================
 const now = () => performance.now() / 1000;
 const G = { state: 'title', st: 0, t: 0, qs: [], qi: 0, res: [], drag: null, cut: null, shake: 0, total: 0, best: store.get('mp_best', 0), newBest: false, lastTick: 99,
-  custom: false, all: store.get('mp_all', false), justAll: false, toast: null, fill: [] };   // custom＝選んだお題で遊んでいる / all＝全お題を遊んで「選ぶ」が開いた
+  custom: false, all: store.get('mp_all', false), justAll: false, toast: null, fill: [] }; window.__nkwG = G;   // custom＝選んだお題で遊んでいる / all＝全お題を遊んで「選ぶ」が開いた
 const since = () => now() - G.st;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const ease = k => 1 - Math.pow(1 - clamp(k, 0, 1), 3);
@@ -701,5 +701,10 @@ if (document.fonts && document.fonts.load) {
 window.__mp = { G, L, MAP, THEMES, share, halfC, weights, doCut, startGame, nextQ, sx, sy, kx, ky, NC: () => NC, fitMap, SEL, selLay, selCell, openSelect, pickThemes, markSeen, leftCount, store, setState };
 })();
 </script>
+<!-- nkw-ikkaku --><style>.nkw-ikk{display:inline-block;box-sizing:border-box;max-width:92vw;padding:5px 14px;border-radius:999px;background:rgba(255,255,255,.92);border:1px solid rgba(60,90,120,.35);color:#3c5a78;font:500 12.5px/1.4 "Hiragino Sans","Noto Sans JP",system-ui,sans-serif;text-decoration:none;white-space:nowrap;letter-spacing:.02em}#nkw-ikk{position:fixed;z-index:2147483000;transform:translate(-50%,-50%);transition:opacity .3s;box-shadow:0 2px 8px rgba(0,0,0,.12)}#nkw-ikk[hidden]{display:none}</style>
+<a id="nkw-ikk" class="nkw-ikk" href="https://nkworks-games.com/ikkaku-ichie/?from=nippon-mapputatsu" target="_blank" rel="noopener" hidden>漢字パズル「一画一会」体験版 ›</a>
+<script>(function(){var a=document.getElementById("nkw-ikk"),since=0;
+function cv(){var b=null,m=0;document.querySelectorAll("canvas").forEach(function(c){var r=c.getBoundingClientRect();if(r.width*r.height>m){m=r.width*r.height;b=r;}});return b;}
+setInterval(function(){var G=window.__nkwG,show=false;try{if(G&&(G.state==='result')){if(!since)since=Date.now();if(Date.now()-since>1500){var r=cv();if(r){var S=r.width/360,H=r.height/S,y=H-24;if(y!=null){a.style.left=(r.left+r.width/2)+"px";a.style.top=(r.top+y*S)+"px";show=true;}}}}else since=0;}catch(e){}a.hidden=!show;},250);})();</script>
 </body>
 </html>
