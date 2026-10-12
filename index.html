@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="google-adsense-account" content="ca-pub-2073267239630350">
 <title>ニッポン真っ二つ</title>
 <meta name="description" content="人口・面積・神社の数…お題がちょうど半分になるように、日本地図をまっすぐ1本の線で切るゲーム。あなたは何点？">
 <!-- ▼Xのカード表示用（公開URLに合わせて書き換える） -->
@@ -17,15 +18,45 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;800&display=swap" rel="stylesheet">
 <style>
+:root{
+  --ad-h:50px;   /* 広告バナーの高さ（スマホ） */
+  --ad-gap:75px; /* バナーとゲームの間の余白。いつも75px（スクリプト resize も75pxで固定） */
+}
+@media (orientation:landscape) and (min-width:728px) and (min-height:500px){:root{--ad-h:90px}}  /* 横長の画面（パソコン・横向きのタブレット）ではバナーを90pxに */
 html,body{margin:0;height:100%;background:#ffb52e;overflow:hidden;overscroll-behavior:none}
 body{touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
 canvas{display:block;position:absolute;left:0;top:0}
 #sa{position:fixed;left:0;top:0;width:0;height:0;padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom);visibility:hidden}
+/* 広告バナーの場所：画面のいちばん下。iPhoneのホームバーと重ならないよう、そのぶん下を空ける。広告が出ていなくても、この高さは変わらない */
+#ad-zone{position:fixed;left:0;right:0;bottom:0;z-index:10;height:var(--ad-h);padding-bottom:env(safe-area-inset-bottom,0px);background:#eaa223;box-shadow:0 -1px 0 rgba(43,33,24,.14);touch-action:manipulation;-webkit-user-select:auto;user-select:auto}
+#ad-banner{width:100%;height:var(--ad-h);overflow:hidden;display:flex;align-items:center;justify-content:center;max-height:var(--ad-h);contain:layout paint}
+#ad-banner ins{max-height:var(--ad-h)!important;overflow:hidden}
+#ad-banner ins.adsbygoogle[data-ad-status="unfilled"]{display:none!important}   /* 広告が来ない時は 空の四角を出さない（帯の高さは そのまま） */
+
 </style>
 </head>
 <body>
 <div id="sa"></div>
 <canvas id="c"></canvas>
+<!-- ▼広告バナーの場所（画面のいちばん下の帯）
+     ・帯の高さ：スマホは50px、横長の画面（パソコンなど）は90px。ゲームとの間は いつも75pxあけてあります
+     ・広告が出ない時も、この帯の高さは そのまま残ります（ゲームの位置は ずれません）
+     ・ゲームの操作は、この帯の上では反応しません -->
+<div id="ad-zone">
+  <div id="ad-banner">
+    <!-- ↓↓↓ AdSense の広告ユニットのコード（全ゲーム共通「ゲーム用バナー」・固定サイズ 320×50）↓↓↓ -->
+    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-2073267239630350"
+         crossorigin="anonymous"></script>
+    <ins class="adsbygoogle"
+         style="display:inline-block;width:320px;height:50px"
+         data-ad-client="ca-pub-2073267239630350"
+         data-ad-slot="6261635446"></ins>
+    <script>
+         (adsbygoogle = window.adsbygoogle || []).push({});
+    </script>
+    <!-- ↑↑↑ ここまで ↑↑↑ -->
+  </div>
+</div>
 <noscript>JavaScriptをオンにして遊んでください</noscript>
 <script>
 (() => {
@@ -296,17 +327,32 @@ function zoomAt(fx, fy, k1) {   // 画面上の点 (fx, fy) の下にある場�
 function zoomReset() { Z.k = 1; Z.x = Z.y = 0; Z.from = null; }
 function zoomBack() { const f = Z.from, e = ease((now() - f.t) / 0.4); Z.k = 1 + (f.k - 1) * (1 - e); Z.x = f.x * (1 - e); Z.y = f.y * (1 - e); if (e >= 1) zoomReset(); }   // 答え合わせ：0.4秒で全体にもどる
 const kx = X => (X - MAP.ox) / MAP.s, ky = Y => (Y - MAP.oy) / MAP.s;
+/* 広告バナーまわりの場所とり。
+   バナーの高さ（50px／横長の画面は90px）と、iPhoneのホームバーのぶんはCSSで決まる。ここでは、バナーとゲームの間の余白を決める。
+   余白は いつも75px（AD_GAP_MIN＝AD_GAP_MAX＝75）。残りの高さで ゲームを いちばん大きく出す */
+const AD_GAP_MIN = 75, AD_GAP_MAX = 75;
+let AREA_B = 1e9;          // ゲームの場所の下のはし（画面の上からのpx）。これより下は、余白とバナー
 function resize() {
   const sa = document.getElementById('sa'), cs = getComputedStyle(sa);
   const st = parseFloat(cs.paddingTop) || 0, sb = parseFloat(cs.paddingBottom) || 0;
-  const vw = window.innerWidth, vh = window.innerHeight - st - sb;
+  const zone = document.getElementById('ad-zone'), zoneH = zone ? zone.offsetHeight : sb;      // バナー＋ホームバーぶん
+  const vw = window.innerWidth, free = window.innerHeight - st - zoneH;                        // free＝バナーより上で使える高さ
+  const gap = zone ? clamp(free - 600 * Math.min(1, vw / W), AD_GAP_MIN, AD_GAP_MAX) : 0;
+  document.documentElement.style.setProperty('--ad-gap', gap + 'px');
+  const vh = Math.max(1, free - gap); AREA_B = st + vh;
   S = Math.min(vw / W, vh / 600); H = Math.min(vh / S, 820);
   DPR = Math.min(window.devicePixelRatio || 1, 2.5);
   const cw = W * S, ch = H * S; OX = (vw - cw) / 2; OY = st + (vh - ch) / 2;
   Object.assign(cv.style, { width: cw + 'px', height: ch + 'px', left: OX + 'px', top: OY + 'px' });
   cv.width = Math.round(cw * DPR); cv.height = Math.round(ch * DPR);
-  layout();
+  layout(); LSIG = layoutSig();
 }
+/* 画面の大きさや、iPhoneのホームバー・ノッチのぶん（安全領域）は、画面を回した時などに、合図（resize）よりあとで変わることがある。
+   そこで毎コマ、前に計算した時と同じかを見くらべて、変わっていたら すぐ計算し直す（指でつまんで拡大している間は、何もしない） */
+let LSIG = '';
+const SA_CS = getComputedStyle(document.getElementById('sa'));
+function layoutSig() { const z = document.getElementById('ad-zone'); return window.innerWidth + '|' + window.innerHeight + '|' + SA_CS.paddingTop + '|' + SA_CS.paddingBottom + '|' + (z ? z.offsetHeight : 0); }
+function layoutWatch() { const vv = window.visualViewport; if (vv && Math.abs(vv.scale - 1) > 0.01) return; if (layoutSig() !== LSIG) resize(); }
 window.addEventListener('resize', resize);
 
 // ================= 保存 =================
@@ -834,11 +880,12 @@ function onUp(x, y, id) {
   if (G.state === 'cut' && G.drag) { onMove(x, y, id); const d = G.drag; G.drag = null; if (d.len >= MIN_SWIPE) doCut(d.x0, d.y0, d.x1, d.y1); }
 }
 const lx = e => (e.clientX - OX) / S, ly = e => (e.clientY - OY) / S;
-/* この版には広告バナーがないので、画面ぜんぶがゲームの場所（inArea はいつも true）。lastIn＝指・マウスが さいごにあった場所 */
-const inArea = () => true, lastIn = new Map();
+/* 指・マウスが、ゲームの場所（バナーと余白より上）にあるか。
+   線を引いている途中で バナーや余白の上まで出た時は、そこでの動きは拾わず、最後にゲームの中にあった場所で止まっているものとして扱う */
+const inArea = e => e.clientY <= AREA_B, lastIn = new Map();
 /* 拡大・縮小の操作（問題の画面だけ。お題のカードが出た瞬間から、切り終わるまで）。
    指：2本目の指がふれたら「つまむ」に切りかえる（引きかけの線は取り消す）。つまんだあとは、指をぜんぶ離すまで「切る」を始めない（うっかり切らないように）。
-   　　数えるのは、ゲームの画面にふれた指だけ。
+   　　数えるのは、ゲームの画面にふれた指だけ（バナーや余白にふれている指は数えない）。
    マウス：左ボタンは今までどおり「切る」。右ボタン（まん中のボタン）を押しながら動かすと、地図の位置がずれる。ホイールで拡大・縮小 */
 const TOUCH = new Map();      // 画面にふれている指：id → [x, y]
 let pinch = null, pan = null, noCut = false;      // pinch＝2本指でつまんでいる間の記録　pan＝右ボタンで動かしている間の記録
@@ -893,7 +940,7 @@ document.addEventListener('gesturestart', e => e.preventDefault());
 // ================= ループ =================
 resize();
 let last = performance.now();
-function frame(nw) { requestAnimationFrame(frame); const dt = Math.max(0, Math.min(0.05, (nw - last) / 1000)); last = nw; update(dt); render(); }
+function frame(nw) { requestAnimationFrame(frame); layoutWatch(); const dt = Math.max(0, Math.min(0.05, (nw - last) / 1000)); last = nw; update(dt); render(); }
 requestAnimationFrame(frame);
 if (document.fonts && document.fonts.load) {
   const t = THEMES.map(x => x.name + x.tip + x.src).join('') + RANKS.map(r => r.join('')).join('') + JUDGE.map(j => j[1]).join('') +
@@ -901,7 +948,7 @@ if (document.fonts && document.fonts.load) {
   document.fonts.load(`800 20px "M PLUS Rounded 1c"`, t).catch(() => { }); document.fonts.load(`500 20px "M PLUS Rounded 1c"`, t).catch(() => { });
 }
 // テスト用（遊びには影響しません）
-window.__mp = { area: () => ({ bottom: OY + H * S, S, H, OX, OY }), Z, ZOOM_MAX, zoomAt, zoomInfo: () => ({ pinch: !!pinch, pan: !!pan, noCut, touches: TOUCH.size, input: INPUT }), G, L, MAP, THEMES, share, halfC, weights, doCut, startGame, nextQ, sx, sy, kx, ky, NC: () => NC, fitMap, SEL, selLay, selCell, openSelect, pickThemes, markSeen, leftCount, store, setState, GENRES, UNLOCK_N, unlockLeft, selList, tabLay, NEW_THEMES, newSeen, newLeft, newDone, layout };
+window.__mp = { area: () => ({ bottom: AREA_B, S, H, OX, OY }), Z, ZOOM_MAX, zoomAt, zoomInfo: () => ({ pinch: !!pinch, pan: !!pan, noCut, touches: TOUCH.size, input: INPUT }), G, L, MAP, THEMES, share, halfC, weights, doCut, startGame, nextQ, sx, sy, kx, ky, NC: () => NC, fitMap, SEL, selLay, selCell, openSelect, pickThemes, markSeen, leftCount, store, setState, GENRES, UNLOCK_N, unlockLeft, selList, tabLay, NEW_THEMES, newSeen, newLeft, newDone, layout };
 })();
 </script>
 <!-- nkw-ikkaku --><style>.nkw-ikk{display:inline-block;box-sizing:border-box;max-width:92vw;padding:5px 14px;border-radius:999px;background:rgba(255,255,255,.92);border:1px solid rgba(60,90,120,.35);color:#3c5a78;font:500 12.5px/1.4 "Hiragino Sans","Noto Sans JP",system-ui,sans-serif;text-decoration:none;white-space:nowrap;letter-spacing:.02em}#nkw-ikk{position:fixed;z-index:2147483000;transform:translate(-50%,-50%);transition:opacity .3s;box-shadow:0 2px 8px rgba(0,0,0,.12)}#nkw-ikk[hidden]{display:none}</style>
