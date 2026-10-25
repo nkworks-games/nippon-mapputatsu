@@ -43,18 +43,7 @@ canvas{display:block;position:absolute;left:0;top:0}
      ・広告が出ない時も、この帯の高さは そのまま残ります（ゲームの位置は ずれません）
      ・ゲームの操作は、この帯の上では反応しません -->
 <div id="ad-zone">
-  <div id="ad-banner">
-    <!-- ↓↓↓ AdSense の広告ユニットのコード（全ゲーム共通「ゲーム用バナー」・固定サイズ 320×50）↓↓↓ -->
-    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-2073267239630350"
-         crossorigin="anonymous"></script>
-    <ins class="adsbygoogle"
-         style="display:inline-block;width:320px;height:50px"
-         data-ad-client="ca-pub-2073267239630350"
-         data-ad-slot="6261635446"></ins>
-    <script>
-         (adsbygoogle = window.adsbygoogle || []).push({});
-    </script>
-    <!-- ↑↑↑ ここまで ↑↑↑ -->
+  <div id="ad-banner"><!-- 広告は一時停止中：AdSenseのサイト審査が通るまで、ゲーム画面では広告を読み込みません（帯と余白はそのまま）。審査後にこの変更を元に戻します -->
   </div>
 </div>
 <noscript>JavaScriptをオンにして遊んでください</noscript>
@@ -956,5 +945,10 @@ window.__mp = { area: () => ({ bottom: AREA_B, S, H, OX, OY }), Z, ZOOM_MAX, zoo
 <script>(function(){var a=document.getElementById("nkw-ikk"),since=0;
 function cv(){var b=null,m=0;document.querySelectorAll("canvas").forEach(function(c){var r=c.getBoundingClientRect();if(r.width*r.height>m){m=r.width*r.height;b=r;}});return b;}
 setInterval(function(){var G=window.__nkwG,show=false;try{if(G&&(G.state==='result')){if(!since)since=Date.now();if(Date.now()-since>1500){var r=cv();if(r){var S=r.width/360,H=r.height/S,y=H-24;if(y!=null){a.style.left=(r.left+r.width/2)+"px";a.style.top=(r.top+y*S)+"px";show=true;}}}}else since=0;}catch(e){}a.hidden=!show;},250);})();</script>
+<!-- nkw-info：タイトル画面の時だけ、説明ページへのリンクを出す --><style>#nkw-info{position:fixed;z-index:2147483000;transform:translate(-50%,-50%);box-sizing:border-box;max-width:92vw;padding:4px 12px;border-radius:999px;background:rgba(255,255,255,.88);border:1px solid rgba(60,90,120,.3);color:#3c5a78;font:500 11.5px/1.4 "Hiragino Sans","Noto Sans JP",system-ui,sans-serif;text-decoration:none;white-space:nowrap;letter-spacing:.02em;box-shadow:0 2px 8px rgba(0,0,0,.1)}#nkw-info[hidden]{display:none}</style>
+<a id="nkw-info" href="/games/nippon-mapputatsu/" hidden>遊び方・ほかのゲーム ›</a>
+<script>(function(){var a=document.getElementById("nkw-info");
+function cv(){var b=null,m=0;document.querySelectorAll("canvas").forEach(function(c){var r=c.getBoundingClientRect();if(r.width*r.height>m){m=r.width*r.height;b=r;}});return b;}
+setInterval(function(){var G=window.__nkwG,show=false;try{if(G&&G.state==='title'){var r=cv();if(r){var S=r.width/360,H=r.height/S,y=H-36;a.style.left=(r.left+r.width/2)+"px";a.style.top=(r.top+y*S)+"px";show=true;}}}catch(e){}a.hidden=!show;},250);})();</script>
 </body>
 </html>
