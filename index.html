@@ -19,10 +19,10 @@
 <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;800&display=swap" rel="stylesheet">
 <style>
 :root{
-  --ad-h:50px;   /* 広告バナーの高さ（スマホ） */
-  --ad-gap:75px; /* バナーとゲームの間の余白。いつも75px（スクリプト resize も75pxで固定） */
+  --ad-h:0px;   /* 広告バナーの高さ（スマホ） */
+  --ad-gap:0px; /* バナーとゲームの間の余白。いつも75px（スクリプト resize も75pxで固定） */
 }
-@media (orientation:landscape) and (min-width:728px) and (min-height:500px){:root{--ad-h:90px}}  /* 横長の画面（パソコン・横向きのタブレット）ではバナーを90pxに */
+@media (orientation:landscape) and (min-width:728px) and (min-height:500px){:root{--ad-h:0px}}  /* 横長の画面（パソコン・横向きのタブレット）ではバナーを90pxに */
 html,body{margin:0;height:100%;background:#ffb52e;overflow:hidden;overscroll-behavior:none}
 body{touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
 canvas{display:block;position:absolute;left:0;top:0}
@@ -38,14 +38,7 @@ canvas{display:block;position:absolute;left:0;top:0}
 <body>
 <div id="sa"></div>
 <canvas id="c"></canvas>
-<!-- ▼広告バナーの場所（画面のいちばん下の帯）
-     ・帯の高さ：スマホは50px、横長の画面（パソコンなど）は90px。ゲームとの間は いつも75pxあけてあります
-     ・広告が出ない時も、この帯の高さは そのまま残ります（ゲームの位置は ずれません）
-     ・ゲームの操作は、この帯の上では反応しません -->
-<div id="ad-zone">
-  <div id="ad-banner"><!-- 広告は一時停止中：AdSenseのサイト審査が通るまで、ゲーム画面では広告を読み込みません（帯と余白はそのまま）。審査後にこの変更を元に戻します -->
-  </div>
-</div>
+<!-- ゲーム中の広告バナーはなし（細かい操作が必要なため。2026-10-29） -->
 <noscript>JavaScriptをオンにして遊んでください</noscript>
 <script>
 (() => {
